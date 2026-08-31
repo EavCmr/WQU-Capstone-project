@@ -1,6 +1,0 @@
-year,revenue,net_income,net_margin_pct,ebitda_margin_pct,current_ratio,net_worth_to_assets,debt_ratio_pct,altman_z2,distress_zone,basis
-2019,327080,-23895,-7.305552158493335,9.074538339244222,,,,,Not computable (no balance sheet),management
-2020,341334,5577,1.6338835275712351,8.66101824019875,,,,,Not computable (no balance sheet),management
-2021,342513,-35521,-10.370701258054439,14.505434830210824,0.8925524436890077,0.1321625473038228,86.78374526961773,0.03491825531331799,Distress zone,statutory (Deloitte-audited)
-2022,356346,10028,2.8141188620049054,26.175683184320857,0.8535122707587018,0.1353942737158302,86.46057262841698,0.06607097415403701,Distress zone,statutory (Deloitte-audited)
-2023,468658,8435,1.799819911321262,16.215235843621574,,,,,Not computable (no balance sheet),management (not comparable in level to statutory turnover)
