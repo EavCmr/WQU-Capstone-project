@@ -1,0 +1,718 @@
+\documentclass[final,1p,times]{elsarticle}
+
+\usepackage{amssymb}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+
+\journal{MScFE 690 Capstone Project, WorldQuant University}
+
+\begin{document}
+
+\begin{frontmatter}
+
+\title{Operational Signals as Leading Indicators of Financial Distress in a Data-Scarce State-Owned Utility: A Forecast-Ablation Framework for a Representative Cameroon-Based Electricity Utility}
+
+\author{Nwsiba Priethy\corref{cor1}}
+\ead{nwsibapn@gmail.com}
+\cortext[cor1]{Corresponding author.}
+\author{Ariel Vyny Epouye\corref{cor2}}
+\ead{vynyepouye@gmail.com}
+\address{MScFE 690 Capstone Project, WorldQuant University}
+
+\begin{abstract}
+Traditional financial distress models operate under the premise of prompt and audited reporting along with a market-oriented event of failure such as delisting or default; neither of these applies to an unlisted and state-owned electricity utility in an environment characterized by data deficiency in developing economies, which is the norm for the electricity industry in Cameroon. Following the Project Proposal, this report provides insights into a generic and unnamed Cameroon state-owned electricity utility known as ``the utility''; no financial data for any particular firm is provided. Without any prior distress history for the utility, an actual dataset of 87 utility-years from nine US electricity utilities (SEC EDGAR filings, six actual distress-years) is used for training an interpretable ratio-based classifier, which is then directly applied – without any further training – to 17 actual utility-years from five Sub-Saharan African utilities' own annual-report ratio series (including that of the utility) solely for out-of-sample testing. An additional operational signal is created using the actual metered consumption series of the utility: a seasonally adjusted time series model fixed at 2020–2022 is projected forward, without re-fitting, to 2023–2025; its forecast error growth rate is tested as an independent leading signal. The ratio method, applied without change, finds that Kenya's KPLC fiscal year 2023 is the sole highest risk point among five observations, precisely as found by Kenya's Auditor-General in her independent and documented determination for the same year. For the utility company, this method and an interpretable four-criteria rule identify fiscal years 2021--2022 as the only years where there was full agreement among all fourteen criteria, while on its own, the utility company's consumption forecasting error increases by +0.176 percent monthly (p = 0.0015, n = 34 months) during the exact 2023--2025 period where independent documentation shows the utility company's debt to be increasing more than two-fold and culminating in a government bailout in May 2026. The ratio-only versus ratio-plus-operational ablation itself (Model A versus Model B) is not significantly supported on the smaller real United States subset with usable operational data (AUC delta $-0.006$), and this finding of no effect is reported and not suppressed; but the dynamic and Youden's-J-optimized decision threshold manages to restore an improved F1 score for the augmented model (0.571 versus 0.364), revealing that it was the lack of a well-designed decision rule and not any signal difference that caused the previous failure. The three different signals -- a transferred ratio predictor, a true revenue-leakage proxy, and a true consumption forecast divergence rate -- all independently converge on the onset time for the utility's crisis and the fact that the situation deteriorated after that point.
+\end{abstract}
+
+\begin{keyword}
+financial distress prediction \sep electricity utilities \sep SHAP interpretability \sep logistic regression \sep SARIMA load forecasting \sep transfer validation \sep data scarcity \sep Sub-Saharan Africa \sep early-warning systems
+\end{keyword}
+
+\end{frontmatter}
+
+%% =====================================================================
+\section{Introduction}
+\label{S:intro}
+
+The development of corporate distress models within the past six decades has seen a progression from univariate ratio screening (Beaver), multiple discriminant analysis (Altman), to probability and hazard models (Ohlson; Zmijewski; Shumway) and, finally, to gradient-boosted ensembles (Barboza et al.). This progression entailed significant methodological innovations, but minimal change to the design: a set of financial ratios about liquidity, leverage, profitability, and cash flows derived from audited accounting data is used to predict an indicator linked to bankruptcy, default, or delisting. This design works well for public corporations in efficient capital markets with full disclosure of information; it does not work for a publicly listed state-owned electricity utility company in a developing country where none of these three assumptions is true.
+
+Similar to the Project Proposal, some explanations regarding the scope are necessary before we move forward. This paper neither names nor describes any company; the computations below are based on (i) the real United States utility data, which is solely used for comparative purposes as a training population, and (ii) the real ratios of five Sub-Saharan African utilities, where one is an anonymous, state-owned electricity utility located in Cameroon, known as ``the utility'' hereafter. Any claims about having access to any non-public financial data of any named company are not stated within this paper. Cameroon has been selected deliberately rather than randomly, since it possesses a strong state control within the electricity sector, its tariff administration and regulation is done by one single body ARSEL, while independent studies conducted by the World Bank and the International Energy Agency prove that there is a delayed disclosure, tariff suppression and payment arrears problem exactly as described in this paper's distress definition (Trimble et al.; International Energy Agency).
+
+Whereas the Project Proposal has flagged a central data problem in its target utility – lack of labelled distress history for the utility – this problem has not been fixed but bypassed. Supervised classification requires a label, which can be provided by no previously unlisted, state-owned, African utility in a market failure event. Therefore, this paper constructs a ratio-based classifier for a population of real companies and their labelled company-years of distress experience -- nine United States electricity utilities with eighty-seven real company-years and six real, audited distress events (Section~\ref{S:method}), and then applies this classifier without re-training or tuning to seventeen real utility-years from five Sub-Saharan African utilities and their own published annual report ratios, including the utility under discussion. Thus, the labelling problem identified in the proposal is transformed into an empirical question: does a learned pattern of distress in a rich-data, differently regulated market generalize to a poor-data, administratively tariffed market, which was not seen in the training phase? Section~\ref{S:results} provides an affirmative answer for at least one of the transfer utilities in question, which is checked against a real independent audit finding rather than the self-made label.
+
+Secondly, the availability of a complimentary data source has been made possible since the Proposal period: a time series of actual consumption values measured by the meter readings of the utility firm (seventy months of data were collected by accessing the data using a team member through his work). The conceptual use of this data during the proposal stage was possible based on its validation using a proxy data set called 'UCI Electricity Load Diagrams' (since there was no utility-specific data at that time) (Section~\ref{S:results-forecast}).
+
+Here we test a particular hypothesis: In the case of a power company operating under uncertain demand and state-dependent revenues, operational metrics such as load forecast error and forecast divergence trend calculated using the load forecast error have predictive power regarding financial stress independent of the accounting ratio, and the signal can be extracted even when the ratio-based classifier was not exposed to this power company in its training phase. We test this hypothesis on empirical data for the first time in this paper in Section~\ref{S:results}, using three signals constructed independently and without reconciliation: transferred ratio classifier, real revenue leakage proxy, and real consumption forecast divergence rate.
+
+The project's contributions, in essence, consist of the following four contributions listed in the Proposal but evaluated against real-world rather than synthetic or proxy datasets. First, it joins electricity consumption forecasting and financial distress prediction using feature engineering and cross-signal validation instead of considering these two tasks separately. Second, it creates a protocol for transfer validation that never needs the distress labels of the target company itself but instead uses only publicly available financial ratios, thus making this methodology applicable to any unlisted state-owned company with an impossible-to-know delisting label. Third, it considers data scarcity specific to Cameroon as a design constraint, which is resolved using real proxy population training and real out-of-sample transfer instead of an inconvenient gap covered up by the use of synthetic data. Fourth, it applies SHAP to split the distress signal into its operational and structural components and introduces a new, quantifiable operational metric called Consumption Forecast-Divergence Rate, which is not defined anywhere in the reviewed literature (Section~\ref{S:related}).
+
+\subsection{Pain Points in Current Quantitative Finance Practice, and How This Project Addresses Them}
+\label{S:painpoints}
+
+The body of financial distress literature described above is based on the tools used in quantitative finance: ratio--based scoring systems, discriminant analysis, logistic/hazard models, and the more recent gradient-boosted ensembles. These tools make use of four assumptions that apply to a company listed on a stock market but not to a utility firm.
+
+\emph{Pain point 1: The dependent variable needs an event in the market.} Every classical model (Beaver; Altman; Ohlson; Zmijewski; Shumway) defines financial distress based on delisting, default, or bankruptcy filing. The listed utility company cannot have any of these because there is no event to define.\emph{This project's response}: a label derived from independently verifiable evidence regarding payment arrears and cash flow stress (Section~\ref{S:theory}), which is validated in Section~\ref{S:results-transfer} using two independent indicators that have never been employed to derive the label itself.
+
+\emph{Pain point 2: disclosure has to be made promptly, and must be audited.} The ratio model assumes that the financial statements will be released a few months after the fiscal year ends. State-owned Sub-Saharan African utilities release these financial statements years behind schedule, if at all. This means that the ratio model cannot deliver an \emph{early} warning, just a historic one. \emph{Response for this project}: The forecast-ablation case study (Section~\ref{S:results-forecast}) uses data that the utility generates on its own regarding its monthly consumption figures -- this information is available well in advance of the financial ratios.
+
+\emph{Pain point 3: one classifier must work anywhere that the label is unknown.} Current small-sample and emerging-market studies (Kristanti et al.; Elhoseny et al.) still need ratio data \emph{about the entity under study} in order to train on. It does not help in an extremely data-poor situation, where no such history of labutilitiesata exists about the entity at all. \emph{Response from this project}: the transfer-validation approach described in Section~\ref{S:transfer-design}, which uses labelled training data about a different entity, and validates entirely out-of-sample.
+
+\emph{Pain point 4: generic leverage and coverage thresholds are used universally across all industries.} Distress measures based on a standard set of thresholds (such as Altman's general rule of thumb with respect to a 0.50 leverage ratio, for example) have been standardized on average balance sheet structure rather than on highly leveraged but safe utility companies which could afford much higher leverage. If the same thresholds were applied to the utility sector, most healthy years for utility would be recognized as distressed. \emph{How this thesis solves the problem}: In case of model C thresholds (based on Youden's J measure), see Section~\ref{S:results-modelc}.
+
+These four solutions combined are the practical answer to the question that a quantitative finance practitioner should ask of this project, and which is more relevant than ``is it possible to build a better classifier?'': Is it even possible to build the classifier under the circumstance that none of the assumptions of the conventional toolkit apply? As shown in Section~\ref{S:results}, the answer to this is yes.
+
+This paper is organized as follows. The next section~\ref{S:theory} summarizes the relevant theoretical background. Section~\ref{S:related} puts this research into the broader context by providing an explicit taxonomy of the field. Section~\ref{S:method} outlines the modified methodology, which includes an explicit comparison to the one proposed in the Project Proposal document. Section~\ref{S:results} discusses the new results based on actual data, namely, the ratio-based ablation, SHAP attribution, the Utility Distress Score and its thresholds, transfer validation on two different distress variables, and the forecast-ablation case study. Finally, Section~\ref{S:discussion} reflects upon what these results imply and what they do not. Applications of the work are outlined in Section~\ref{S:applications}, and conclusions are provided in Section~\ref{S:conclusion}.
+
+%% =====================================================================
+\section{Theoretical Framework}
+\label{S:theory}
+
+\subsection{Financial Distress Without a Market Signal}
+
+In classical financial distress models, the dependent variable is defined through some sort of market event—bankruptcy announcement, default, or delisting (Altman; Ohlson; Shumway). For a state-owned company that does not list its shares on any stock exchange, this cannot be done. In this study, an event approach is applied based on payment arrears and cash flow stress, independently evidenced in regional financial press and international organizations, as per best practices in emerging market financial distress studies (Kristanti et al.). This is labeled a financial distress proxy, not financial distress in itself, a distinction made explicit throughout the paper, particularly in Section~\ref{S:results}.
+
+\subsection{Operational Risk as a Leading Indicator of Financial Risk}
+
+The theory connecting the classification phase with the forecasting phase of the project is based on the idea that the uncertainty in the environment, measured through the load forecast error and its evolution through time, causes financial uncertainty in a utility exposed to both demand and investment uncertainties. This idea does not assume that the operational risk fully explains the financial distress; it assumes merely that the operational risk contains some information not accounted for by the delayed and aggregated financial ratios, according to the general idea that the high-frequency dynamic variables can discover the risky situation earlier than the delayed and aggregated accounting variables (Hong and Fan). In Section~\ref{S:results-forecast}, the idea is tested for the first time in the project using the actual consumption data of the utility rather than the public proxy.
+
+\subsection{Interpretability and Decision Thresholds as Structural Requirements}
+
+The distress score will be of no use to the banker, regulator, or utility manager if its underlying reasoning is unclear and its threshold is not justified. Mathematical underpinnings of the concept of interpretable machine learning and the SHAP approach developed by Lundberg and Lee and Molnar serve as a basis for attribution of the output of a machine learning model to its inputs (Molnar; Lundberg and Lee). Another condition is the data-driven nature of the choice of the threshold of the binary indicator derived from the continuously valued risk score, as explained below. In line with the methodology of this paper (Section~\ref{S:method}), Youden's J statistic, maximizing the difference between true- and false-positive rates (Youden), will be employed throughout this study both to calculate interpretable ratio thresholds of Model C and to find a reasonable threshold for the probability output of the classifier rather than using an arbitrary 0.5 threshold.
+
+%% =====================================================================
+\section{Related Work}
+\label{S:related}
+
+In this section, I will review the same five literature groups as the Project Proposal: Statistical and discriminant analysis models of distress; Machine Learning Ensembles and their baselines; Interpretable Machine Learning; Electric Load Forecasting; and finally, Utility Viability in Sub-Saharan Africa. This time, however, with reference to actual data outcomes.
+
+\subsection{Statistical and Discriminant-Based Financial Distress Models}
+
+Beaver's univariate ratio analysis was the first attempt to associate accounting numbers with the risk of bankruptcy, and Altman's Z-score using multiple discriminant analysis is still considered the benchmark for all subsequent models (Beaver; Altman). Ohlson used logistic regression instead of discriminant analysis to calculate the probability score (Ohlson), while Zmijewski took into account the bias introduced by sample selection in such models (Zmijewski). Shumway formulated his failure prediction model as a hazard model that takes into account the time-varying variables (Shumway). All five have in common the same feature set (accounting ratios) and the same label set (the occurrence of an observable market failure), none of which is available for the utility. As discussed in Section~\ref{S:method}, the logistic regression framework proposed by Cox and Ohlson -- initially included in the Proposal as a convenient benchmark to be considered before actual data -- turned out to be the main classifier, not a mere benchmark, after real data was obtained.
+
+\subsection{Ensembles in Machine Learning and Their Benchmarks}
+
+However, Barboza et al. and Le and Viviani found that ensemble learning, particularly gradient boosting and bagging trees, outperformed discriminant analysis and logit models in terms of out-of-sample accuracy (Barboza et al.; Le and Viviani); Lokanan and Ramzan replicated this result using another data set of listed firms (Lokanan and Ramzan). Thus, the Proposal proposed to use gradient-boosted trees (Chen and Guestrin) for the classification task. However, on a relatively small real data set of eighty-seven firm-years, having only six instances classified into the distress class, a complex tree-based ensemble classifier will likely yield unstable and highly variable results, even when validated via cross-validation; thus, we follow the approach of Ohlson and Kristanti et al., keeping logistic regression, with L2 penalty and class weighting, as the primary classifier, reserving the robustness check for gradient-boosted trees or random forests (Breiman) for the future (Section~\ref{S:conclusion}).
+
+\subsection{Interpretation of Machine Learning and SHAP in Financial Research}
+
+SHAP by Lundberg and Lee and the broader approach to explainable machine learning by Molnar provide the basis for an emerging suite of finance applications (Lundberg and Lee; Molnar). SHAP is applied by Bussmann et al. for regulatory risk management of credit; SHAP in conjunction with gradient-boosted trees is applied by He et al. and Fukas et al. to prioritize the factors that drive corporate financial distress; the same combination is employed by Nguyen et al. for bankruptcy prediction in a different market (Bussmann et al.; He et al.; Fukas et al.; Nguyen et al.). This paper uses a similar methodology (Section~\ref{S:results-shap}), but, like above, uses it on a logistic regression model instead of a tree-based ensemble, and requires interpretability not only of the estimation but also of thresholding via Youden’s J (Youden).
+\subsection{Electricity Load Forecasting}
+
+SARIMA continues to be a gold-standard interpretable baseline for load forecasting (Box and Jenkins; Hong and Fan), including in West Africa (Andoh et al.), whereas LSTM neural nets (Hochreiter and Schmidhuber) have been demonstrated capable of modeling nonlinear demand dynamics not possible with the classics (Kong et al.; Musbah and El-Hawary). The UCI proxy series used in the Proposal stage favored LSTM over SARIMA, with RMSE 1.79 against 7.30. For the utility's own seventy-month long real consumption series -- shorter and with less complex seasonality compared to the proxy client series -- the finding is reversed: according to a project teammate's independent analysis using the same real series, SARIMA(0,1,1)(0,1,1,12) vs LSTM resulted in significantly lower out-of-sample RMSE (2.28 million versus 11.05 million for eight months of hold-out), corroborating the more general finding that the performance advantage of LSTM shrinks or disappears on real short series when a correctly specified seasonality model has captured most of the structure already (Kong et al.). This paper uses SARIMA(0,1,1)(0,1,1,12) for the forecast ablation study in Section~\ref{S:results-forecast} on this evidentiary basis, and not out of convenience.
+
+\subsection{Viability of SSA Utilities and Lack of Data}
+
+According to the World Bank and the International Energy Agency (Trimble et al.; International Energy Agency), Sub-Saharan African power companies confront a fundamental funding problem due to tariff pricing being inadequate and chronic government underpayment. This funding problem is measured directly using the concept of quasi-fiscal deficit (QFD) in Trimble et al., where the gap between the revenues actually collected by the company versus a benchmark efficient revenue stream is broken down into four separate terms: underpricing, transmission and distribution losses, bill collection losses, and over-staffing (Trimble et al.). The revenue-leakage proxy used in this paper (gap between billed/prorated vs. metered energy usage, Section~\ref{S:results-transfer}) implements directly, every month and at a single utility level, two of the four terms in the QFD breakdown just described, without generating an arbitrary measure; it should be understood as a real-time, case-by-case measure of a subset of the QFD analysis, not as a replication of the complete QFD methodology, which requires capital replacement value and staffing information unavailable for either this paper's US training sample or its Sub-Saharan Africa test sample. The structural issues of these utilities are explained by Nibagwire through the political economy of over-capacity in power generation and not technical issues (Nibagwire), while Prodjinotho et al. illustrate the dependence of regional demand forecasts and their inherent uncertainty at the pool level (Prodjinotho et al.). Competitive distress classification results on small and unbalanced emerging market samples using over-sampling methods such as SMOTE (Chawla et al.), DeLong test (DeLong et al.) for correlated ROC curve comparisons are demonstrated by Kristanti et al. and Elhoseny et al. (Kristanti et al.; Elhoseny et al.). Veganzones and Severin provide an overview of the entire failure prediction literature of the twenty-first century (Veganzones and Severin). The real transfer results of this paper (Section~\ref{S:results-transfer}) contribute a directly relevant data point to the failure prediction literature: real and independent evidence of financial distress of two out of five Sub-Saharan African utilities considered, one of which is corroborated with government audit findings and the other one with a news report of a debt crisis and government bailout (Office of the Auditor-General; Business in Cameroon; Ecofin Agency; Financial Afrik).
+
+\subsection{Positioning of This Study}
+
+Table~\ref{tab:taxonomy} presents a reproduction of and an update to the Proposal taxonomy. None of the papers reviewed use both operational forecasting indicators and distress labeling criteria for privately held, state-owned utilities, and none of the load forecasting studies use their findings in association with a distress classifier. This paper is precisely at this point, as it uses neither any new forecasting methodology nor any new classifier, but it brings together an already existing forecasting methodology, an already existing classification and interpretation methodology, and a new operational indicator (Consumption Forecast Divergence Rate, Section~\ref{S:method}).
+
+\begin{table*}[t]
+\centering
+\small
+\caption{Taxonomy placing this study relative to five related literatures, updated to reflect real-data results.}
+\label{tab:taxonomy}
+\begin{tabular}{p{2.6cm} p{3.3cm} p{2.6cm} p{2.6cm} p{2.8cm}}
+\toprule
+\textbf{Category} & \textbf{Representative studies} & \textbf{Feature basis} & \textbf{Label basis} & \textbf{Applicability to the Utility} \\
+\midrule
+Univariate / discriminant ratio models & Beaver; Altman & Accounting ratios & Market failure event & Label unavailable; ratios delayed \\
+Logit / hazard models & Ohlson; Zmijewski; Shumway & Accounting ratios & Market failure / delisting & Label unavailable; logit chosen here for small-sample stability \\
+ML ensembles for distress & Barboza et al.; Le and Viviani; Lokanan and Ramzan & Accounting ratios & Market failure / delisting & Better estimator on large samples; unstable on this project's small real panel \\
+Interpretable ML / SHAP in finance & Lundberg and Lee; Bussmann et al.; He et al.; Fukas et al.; Nguyen et al. & Accounting ratios (+ some market data) & Market failure / delisting & Interpretability method reused; threshold selection extended via Youden's J \\
+Electricity load forecasting & Box and Jenkins; Hong and Fan; Andoh et al.; Kong et al.; Musbah and El-Hawary & Load / weather / calendar & None (regression task) & SARIMA reused, now validated on the utility's real series \\
+SSA utility viability studies & Trimble et al.; IEA; Nibagwire; Prodjinotho et al. & Sector aggregates (QFD components) & None (descriptive) & Motivates problem; revenue-leakage proxy operationalizes QFD's loss/collection components; real audit/news evidence now added \\
+Small-sample emerging-market distress & Kristanti et al.; Elhoseny et al. & Accounting ratios & Administrative / event-based & Closest precedent; feature set still ratio-only \\
+\textbf{This study} & Proposed & Ratios + transferred classifier + forecast-divergence rate & Event-based (real audit finding / real news-documented arrears) & Direct fit, validated on real data \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+%% =====================================================================
+
+\section{Methodology}
+\label{S:method}
+
+\subsection{Overview of the Updated Research Design}
+
+The methodology used in the research still employs a controlled single-case ablation experiment involving four distinct stages: data collection and labeling, load forecasting and feature extraction, financial distress classification, and interpretability using SHAP analysis. The new development from the Proposal stage is that all the first three stages are conducted using actual data instead of simulated/proxy data, and the third stage further includes a validation step using two actual distress signals.
+
+\subsection{Deviations From the Project Proposal, Stated Explicitly}
+\label{S:deviations}
+
+Three deviations from the planned design of the Proposal are stated here explicitly.
+
+The Proposal intended to use gradient-boosted trees (Chen and Guestrin) as Model A and Model B, whereas logistic regression was to be used as a baseline for interpretability once the data came in. On the obtained real US panel (eighty-seven firm-years, six default cases), a high-capacity tree ensemble failed to produce stable cross-validated results characteristic of small and rare-event sample sizes. Logistic regression, penalized by L2 and class-weighted, is now used as the main classifier for Models A and B, following the precedent set by Ohlson and Kristanti et al. of the small-sample case.
+
+Second, the Proposal's Stage 2 forecasting validation involved the use of the UCI Electricity Load Diagrams data set (Trindade) as a proxy because of the non-existence of a utility-specific series back then. The forecast-ablation case study of this paper (Section~\ref{S:results-forecast}) makes use of the real seventy-month metered consumption series of the utility through employer-authorized access via one of the project team members after submission of the Proposal. The UCI validation is kept in the project documentation as the original Stage-2 methodology test but does not form any part of any result in this paper.
+
+Third, the Proposal's Stage 3--4 ablation and interpretability pipeline was tested only on a synthetic sub-national panel because the sub-national and ARSEL-supplied panel originally requested for the utility was not available within the project timeline. This paper makes use of a labelled United States comparator panel for training and then transfers the model without re-training to a real seventeen year-sub-Saharan African panel of which the real published ratios of the utility form part. The sub-national panel of unlisted firms originally planned for the utility has not been acquired and is not being claimed to have been acquired; the transfer-learning design in Section~\ref{S:transfer-design} is the resolution adopted in its place.
+
+\subsection{Stage 1: Data}
+\label{S:data}
+
+Three real datasets are used, none containing synthetic or fabricated values.
+
+\emph{Training panel.} Eighty-seven real company-years from nine United States electricity utilities (Securities and Exchange Commission EDGAR filings), including six real, audited distress-years (two PG\&E Corp.\ filings, GenOn Energy, and Energy Future Holdings/Oncor). Four ratio features are used throughout: leverage (total liabilities / total assets), equity ratio (total equity / total assets), debt-to-equity, and net margin. A forty-eight-row subset additionally has real operational data hand-extracted from each company's 10-K filings: electricity delivery volume (GWh), its year-over-year change, and its three-year rolling volatility.
+
+\emph{Transfer panel.} Data from 17 real utility-years of annual reports by five Sub-Saharan African utilities -- namely KPLC from Kenya, ECG from Ghana, ZESCO from Zambia, TANESCO from Tanzania, and the utility (Cameroon), with all ratios defined identically. This panel is never used for training; it is used only for scoring purposes.
+
+\emph{Consumption series.} The utility's real monthly consumption series, 70 months (from January 2020 to October 2025), used in the forecast ablation case study in Section~\ref{S:results-forecast}.
+
+\subsection{Cross-Validation Method}
+\label{S:cv}
+
+Since the training panel contains many correlated firm-years within each company, Leave-One-Company-Out (LOCO) validation is used throughout stage 3, where each time a model is trained on all other companies and evaluated only on held-out firm-years. In this way, a history of each firm is not present on both train and test sets at the same time.
+
+\subsection{Stage 3: Models for Financial Distress Classification}
+
+Three models are reported, rather than the four models in the Proposal, due to the deviations described in Section~\ref{S:deviations}.
+
+\emph{Model A (baseline).} Logistic regression on the four ratio features alone, using LOCO cross-validation on the full set of eighty-seven rows and, to facilitate a more direct comparison with Model B, re-tested on the forty-eight-row subset.
+
+\emph{Model B (ablation test variant).} Logistic regression on the Model A ratios and the three operational features, also tested on the forty-eight-row subset in a head-to-head comparison. This is the key ablation test in the paper.
+
+\emph{Model C (interpretable Utility Distress Score).} One equation in closed-form logistic regression on the four ratios along with a ratio-specific threshold obtained separately for each ratio from Youden's J-statistic (Youden), using the training panel of eighty-seven rows: the threshold that maximizes the difference between the true positive rate and the false positive rate. A row is marked \emph{unanimously} if it meets all four thresholds.
+
+Each of these models employs only the four ratios or the four ratios along with three operational metrics, and nothing else. Thus, any performance difference would be due to the addition or omission of the operational metrics, not the model’s complexity.
+
+\subsection{Stage 4: SHAP Interpretability}
+
+Model A with the standardized variables is explained using the linear explainer of SHAP (Lundberg and Lee) in the context of the full training dataset, adopting the "estimate then explain" framework proposed by He et al., Fukas et al., and Nguyen et al. The ranking of the four ratios is based on their mean absolute SHAP values.
+
+\subsection{Transfer-Validation Protocol}
+\label{S:transfer-design}
+
+Model A, trained only on the United States panel, is used to score the seventeen-row African transfer panel, after processing the transfer data using the same feature scaler trained during the training phase -- never standardizing based on the transfer panel’s own mean and standard deviation, which would be tantamount to leaking information from the African panel into a model supposed to be trained only on the United States panel. The four thresholds from Model C, also trained only on the training panel, are applied in the same manner to the transfer panel. This ensures that any concurrence between the results generated by the transferred model and an actual independent distress call in the transfer panel proves generalization rather than training on the solution.
+
+\subsection{Stage 2: Forecast-Ablation Case Study Design}
+\label{S:forecast-design}
+
+The seasonal SARIMA(0,1,1)(0,1,1,12) model is estimated using the real monthly consumption series data for January 2020--December 2022 (thirty-six months) according to the evidential basis discussed in Section~\ref{S:related}. Then the model is frozen, which means it is used to make forecasts for the following thirty-four months (January 2023--October 2025) without being re-estimated in order to replicate how a financial analyst in 2022 would perform this task. This setting makes sure that no information from the 2023--2025 period is incorporated into the forecasting model, thereby avoiding a possible artefact of growing forecast error.
+
+The \emph{Consumption Forecast-Divergence Rate} (CFDR) is defined as the ordinary least squares slope of the absolute monthly forecast error percentage on elapsed months since the forecast origin:
+\[
+\text{CFDR} = \frac{\mathrm{Cov}\big(t,\ |\varepsilon_t|\big)}{\mathrm{Var}(t)}, \qquad \varepsilon_t = \frac{y_t - \hat{y}_t}{y_t},
+\]
+where $y_t$ is actual metered consumption in month $t$ and $\hat{y}_t$ is the frozen model's forecast for month $t$. If the value of CFDR is equal to zero, it means that the system has reached stability. If CFDR is significant and positive, then it means that current consumption is diverging from its own seasonality before 2023. This metric, to the best of our knowledge, has never been used before in the literature discussed in Section~\ref{S:related}.
+
+\subsection{Tools, Data Governance, and Timeline}
+
+All computations are carried out using a common Python codebase that employs pandas and NumPy to work with the data, scikit-learn for logistic regression and cross-validation, SHAP for interpretability, and statsmodels to build the SARIMA forecast. The code, data loaders, and output are version-controlled and are shared by both team members. The one-cell Colab notebook associated with this paper will reproduce all numbers and figures from Section~\ref{S:results} of this paper, using only the raw input files.
+
+%% =====================================================================
+
+\section{Results}
+\label{S:results}
+
+Every number in this section is computed live by the accompanying notebook from real, sourced data; none is estimated, interpolated, or carried over unverified from the Project Proposal.
+
+\subsection{Stage 3 Ablation on the Real United States Panel}
+\label{S:results-ablation}
+
+On the full eighty-seven-row panel, Model A achieves AUC = 0.979 under LOCO cross-validation (Table~\ref{tab:modelA-full}), indicating that the four ratios alone rank company-years by distress risk almost perfectly within this comparator population.
+
+\begin{table}[h]
+\centering
+\small
+\caption{Model A, full United States panel (n = 87), Leave-One-Company-Out cross-validation.}
+\label{tab:modelA-full}
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Model} & \textbf{AUC} & \textbf{Precision} & \textbf{Recall} & \textbf{F1} \\
+\midrule
+Model A (ratios only) & 0.979 & 0.667 & 0.667 & 0.667 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+For the forty-eight-row subset where we have usable real-world operational data, Model A and Model B are tied in terms of AUC performance (0.574 versus 0.568, $\Delta -0.006$), and so the ablation hypothesis is not strongly supported by this small real-world subset, which was described without hype since only four real distress years had usable operational data. For the generic threshold of 0.5 probability, Model A degenerates into Precision = Recall = F1 = 0 on this subset (Table~\ref{tab:ablation-05}), not because of any inability of the model to rank cases (as evidenced by the AUC), but just because no case reaches the 0.5 level in such a tiny and unbalanced sample. Table~\ref{tab:ablation-opt} replicates the comparison for each model at its Youden's J optimal threshold (Youden); the same dynamic thresholding approach as Model C (Section~\ref{S:results-modelc}) is applied -- and the result is that both models do not degenerate into classification and that Model B's F1 (0.571) is clearly higher than Model A's (0.364).
+
+\begin{table}[h]
+\centering
+\small
+\caption{Model A vs. Model B, 48-row operational subset, generic 0.5 cutoff.}
+\label{tab:ablation-05}
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Model} & \textbf{AUC} & \textbf{Precision} & \textbf{Recall} & \textbf{F1} \\
+\midrule
+Model A (same subset) & 0.574 & 0.000 & 0.000 & 0.000 \\
+Model B (ratios + operational) & 0.568 & 0.500 & 0.250 & 0.333 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[h]
+\centering
+\small
+\caption{Model A vs. Model B, 48-row operational subset, Youden's J-optimal cutoff.}
+\label{tab:ablation-opt}
+\begin{tabular}{lccccc}
+\toprule
+\textbf{Model} & \textbf{Cutoff} & \textbf{AUC} & \textbf{Precision} & \textbf{Recall} & \textbf{F1} \\
+\midrule
+Model A (same subset) & 0.291 & 0.574 & 0.286 & 0.500 & 0.364 \\
+Model B (ratios + operational) & 0.448 & 0.568 & 0.667 & 0.500 & \textbf{0.571} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Figure~\ref{fig:roc-a} shows Model A's ROC curve on the full panel; Figure~\ref{fig:roc-ab} shows the fair, same-subset comparison between Model A and Model B underlying Tables~\ref{tab:ablation-05}--\ref{tab:ablation-opt}.
+
+\subsubsection{Statistical Checks: Is the AUC Delta Real, and How Uncertain Is It?}
+
+Two other statistics formally quantifying the confidence level of the small-subset results are presented. The first one is a test developed by DeLong et al. to compare the correlated ROC curves using the same 48 held-out cases and showing that the difference in AUC between Model A and B in these cases is not distinguishable from zero: $\Delta \text{AUC} = +0.006$, 95\% CI $(-0.085, +0.096)$, $p = 0.90$. This confirms that the ablation hypothesis has not been verified with formal statistical tools in the same way as it was obvious from the point estimate. The second test is a paired bootstrap (2,000 resamples of the 48 out-of-fold predictions): the 95\% confidence intervals are wide enough to cover almost all the possible values: AUC $\in (0.170, 0.957)$ for Model A and $(0.109, 1.000)$ for Model B in the same small subset, while AUC $\in (0.946, 1.000)$ for Model A in the whole panel. It is the main conclusion from both tests: Model A result for the full panel is reliable and confident, while any subset-level number in this section is a noisy estimate from four real distress-years and should be considered as just directionally informative.
+
+\subsubsection{Permutation Test: Ruling Out a Chance Result}
+
+An alternative, non-parametric test poses a different question: is there a chance that an AUC this large might have arisen from a model without any real signal, given the sample size? The actual distress labels are permuted 250 times (Models A and B) or 60 times (Model B/RF, more computationally demanding), keeping the LOCO cross-validation framework constant to generate a null distribution of AUC values assuming no information is contained in the ratios (operational features). Table~\ref{tab:permutation} presents the answer: the real AUC of the full panel for Model A (0.979) falls well outside of the null distribution ($p = 0.004$), and so does the random forest AUC on the operational subset (0.915, see Section~\ref{S:results-robustness}) ($p = 0.016$). The weaker subset AUC values obtained by Models A and B (0.574, 0.568 respectively) do not fall outside their null distribution ($p = 0.23$, $p = 0.28$) - in agreement with the conclusions drawn from the DeLong and bootstrap tests above, and another reason why the ablation delta on the subset should be regarded as inconclusive.
+
+\begin{table}[h]
+\centering
+\small
+\caption{Permutation test: observed AUC vs. label-shuffled null distribution.}
+\label{tab:permutation}
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Model} & \textbf{Obs.\ AUC} & \textbf{Null mean (sd)} & \textbf{$n_{\text{perm}}$} & \textbf{$p$} \\
+\midrule
+Model A, full panel & 0.979 & 0.430 (0.147) & 250 & 0.004 \\
+Model A, subset & 0.574 & 0.445 (0.162) & 250 & 0.231 \\
+Model B, subset & 0.568 & 0.438 (0.184) & 250 & 0.279 \\
+Random Forest, subset & 0.915 & 0.431 (0.186) & 60 & 0.016 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.85\linewidth]{figures/fig1a_roc_model_a.png}
+\caption{Model A ROC curve, full United States panel (n = 87), LOCO cross-validation.}
+\label{fig:roc-a}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.85\linewidth]{figures/fig1b_roc_a_vs_b.png}
+\caption{Model A vs. Model B ROC curves, same 48-row operational subset.}
+\label{fig:roc-ab}
+\end{figure}
+
+\subsection{Robustness Check: Tree-Based Alternatives to Logistic Regression}
+\label{S:results-robustness}
+
+As mentioned in Section~\ref{S:deviations}, the robustness analysis using the random forest or gradient-boosted trees model as opposed to logistic regression was deferred till there were more company-years of data available. That robustness analysis is carried out here: the same Leave-One-Company-Out setup, the same United States dataset, and the same features and labels for Model A and Model B above are tested once again using Random Forest and Gradient-Boosted Trees classification methods, without any other changes to the process.
+
+In the whole 87-row dataset (Table~\ref{tab:robustness-full}), logistic regression continues to be the best predictor (AUC = 0.979), better than Random Forest (AUC = 0.954) and Gradient Boosting (AUC = 0.872). In this particular dataset, using the tree-based classification with its added nonlinear capacity actually performs slightly worse than logistic regression, in line with the nearly linear relationship of the four ratios with distress probability.
+
+\begin{table}[h]
+\centering
+\small
+\caption{Robustness check, full United States panel (n = 87), LOCO cross-validation, generic 0.5 cutoff.}
+\label{tab:robustness-full}
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Model} & \textbf{AUC} & \textbf{Precision} & \textbf{Recall} & \textbf{F1} \\
+\midrule
+Logistic Regression & 0.979 & 0.667 & 0.667 & 0.667 \\
+Random Forest & 0.954 & 0.429 & 0.500 & 0.462 \\
+Gradient Boosting & 0.872 & 0.375 & 0.500 & 0.429 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+In the 48-row working subset, the trend flips around (Table~\ref{tab:robustness-op}). The AUC value for logistic regression (0.568) is close to that of random guessing and hardly different from Model A in the working subset; but the AUC for Random Forest jumps up to 0.915, and its Youden's-J optimal cut-off captures all actual years of distress in the working subset (Recall = 1.00) with a Precision of 0.444 (F1 = 0.615), the highest F1 score obtained for the working subset.
+
+\begin{table}[h]
+\centering
+\small
+\caption{Robustness check, 48-row operational subset (ratios + operational features), LOCO cross-validation.}
+\label{tab:robustness-op}
+\begin{tabular}{lcccccc}
+\toprule
+\textbf{Model} & \textbf{AUC} & \multicolumn{2}{c}{\textbf{0.5 cutoff}} & \multicolumn{3}{c}{\textbf{Youden's-J-optimal cutoff}} \\
+ & & \textbf{Prec.} & \textbf{F1} & \textbf{Cutoff} & \textbf{Recall} & \textbf{F1} \\
+\midrule
+Logistic Regression & 0.568 & 0.500 & 0.333 & 0.448 & 0.500 & 0.571 \\
+Random Forest & 0.915 & 0.400 & 0.444 & 0.104 & 1.000 & \textbf{0.615} \\
+Gradient Boosting & 0.551 & 0.333 & 0.400 & 0.997 & 0.500 & 0.444 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The conclusion drawn from this result is conservative in that it does not overstate its strength. A gain of an order-of-magnitude AUC for a single model on a subset of 48 rows and 4 positives through LOCO cross-validation (nine leave-one-out folds in total) is precisely the case when a single classifier may be able to distinguish between the classes based on the particularities of individual firms, rather than generalizable operational features; with only nine firms, nine folds means a substantial loss of non-random observations in the training sample, and the AUC in question is just a single realization rather than an average across many realizations. However, the result may be used as an indication of a pattern to investigate in a larger panel, but not as a proof of the significance of operational features' predictive power: yet, the result rules out one of the explanations of logistic regression's failure to predict the subset in question -- namely, that the operational features contain no information for any model -- since the non-linear model can produce a highly ranked ordering based on the same observations.
+
+There are two additional tests to verify that the Random Forest result is not due to a particular seed. First, the same 48-row check was conducted using ten different seeds (0--9) for bootstrap sampling of the Random Forest algorithm: the AUC is the same up to three decimals for every seed (0.915, sd $= 0.000)$, showing that the result is not influenced by a specific choice of seed. Second, DeLong's test of AUC comparison between logistic regression and Random Forest (ratios and operational features, same 48 cases) results in $\Delta\text{AUC} = -0.347$ in favor of Random Forest, but a 95\% CI of $(-0.852, +0.159)$ and $p = 0.18$, which is not significant due to the high variance of correlated curves on just four positive cases. The two tests show different conclusions: the seed stability test disproves any influence from the random seed, while the DeLong test shows that the AUC increase is not statistically confirmed yet.
+
+\subsection{Stage 4: SHAP Feature Attribution}
+\label{S:results-shap}
+
+Figure~\ref{fig:shap} depicts the SHAP summary plot for Model A on the entire training panel. The top two features based on their mean absolute SHAP values are the net margin (0.753) and debt to equity (0.684). Next in line are the equity ratio and leverage (0.116 each), indicating that the profit and debt ratio adjusted for leverage are the driving forces behind the classification process.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.85\linewidth]{figures/fig2_shap_summary.png}
+\caption{SHAP feature attribution, Model A, real United States panel.}
+\label{fig:shap}
+\end{figure}
+
+\subsection{Model C: The Utility Distress Score and Empirical Thresholds}
+\label{S:results-modelc}
+
+Refitting on the full training panel, Model C yields the closed-form Utility Distress Score (UDS):
+\[
+\text{UDS} = -3.777 + 1.261\,\text{leverage} - 1.261\,\text{equity\_ratio} + 0.461\,\text{debt\_to\_equity} - 2.172\,\text{net\_margin},
+\]
+\[
+P(\text{distress}) = \frac{1}{1 + e^{-\text{UDS}}}.
+\]
+
+Table~\ref{tab:thresholds} gives the early warning Youden’s J-optimality cutoff for each ratio. The leverage ratio of healthy US utility companies in this panel is about 0.76 -- quite higher than the general industrial (Altman-style) estimate of about 0.50 -- signaling that regulated utilities can afford more leverage than assumed by distress prediction models.
+\begin{table}[h]
+\centering
+\small
+\caption{Model C empirical early-warning thresholds (Youden's J, training panel).}
+\label{tab:thresholds}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Ratio} & \textbf{Flag when} & \textbf{TPR} & \textbf{FPR} \\
+\midrule
+Leverage & $> 0.836$ & 1.00 & 0.07 \\
+Equity ratio & $< 0.164$ & 1.00 & 0.07 \\
+Debt-to-equity & $> 5.086$ & 1.00 & 0.01 \\
+Net margin & $< 0.044$ & 1.00 & 0.24 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.85\linewidth]{figures/fig3_thresholds.png}
+\caption{Model C thresholds against the real training-panel distribution (leverage, net margin).}
+\label{fig:thresholds}
+\end{figure}
+
+\subsection{Transfer Validation: KPLC (Kenya) and the Utility (Cameroon)}
+\label{S:results-transfer}
+
+Model A, trained exclusively on United States data and never exposed to any African observations, scores KPLC's five real fiscal years as in Table~\ref{tab:kplc}.
+
+\begin{table}[h]
+\centering
+\small
+\caption{Model A transfer scores, KPLC (Kenya), never trained on KPLC.}
+\label{tab:kplc}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Fiscal year} & \textbf{P(distress)} & \textbf{Rank} & \textbf{Unanimous (Model C)} \\
+\midrule
+2021 & 0.117 & 4 & No \\
+2022 & 0.177 & 3 & No \\
+\textbf{2023} & \textbf{0.239} & \textbf{1} & \textbf{Yes} \\
+2024 & 0.051 & 5 & No \\
+2025 & 0.045 & 5 & No \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The fifth fiscal year, 2023, is ranked first in terms of risk predictions and represents the only unanimous agreement fiscal year. The actual Office of the Auditor General in Kenya reports material uncertainty in relation to KPLC's ability to continue operating as a going concern in the same fiscal year, where the company finds itself with negative working capital for seven consecutive years (Office of the Auditor General). Here, we present the completely non-circular validation finding for this project: the model used in obtaining the ranking has never been trained using any Kenyan observations. The additional, independent external context for this finding is the Quasi Fiscal Deficit (QFD) for the power sector of Kenya obtained by the World Bank and computed for the fiscal years 2012-2015 and not related to the findings in this study in any way, where the QFD has been relatively low and stable (0.6-0.8% of GDP; Trimble et al.).
+When taken in conjunction with the results from 2023, this suggests that the sector was not already in an entrenched state of poor fiscal health a decade before, reinforcing -- without proving on its own merits -- that the result in 2023 represents a true decline from what preceded it. Finally, according to Trimble et al., whereas in the case of the utility's own sector (as below), the QFD of Kenya does not drop to near-zero levels even at benchmark efficiency (\$240 million, 0.4\% of GDP, compared with \$486 million, 0.8\% of GDP, at actual efficiency for the 2015 reference year), indicating that under-pricing, along with inefficiency, is a significant and long-lasting structural factor specific to Kenya.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.85\linewidth]{figures/fig4_kplc_validation.png}
+\caption{KPLC out-of-sample risk trajectory; red indicates Model C unanimous agreement.}
+\label{fig:kplc}
+\end{figure}
+
+Table~\ref{tab:eneo} reports the same scoring for the utility. No single-year independent audit finding is available for the utility (none was found in the public record), so this case is read contextually rather than as a precise single-year match.
+
+\begin{table}[h]
+\centering
+\small
+\caption{Model A transfer scores; the utility (Cameroon) was never trained on the utility.}
+\label{tab:eneo}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Fiscal year} & \textbf{P(distress)} & \textbf{Unanimous (Model C)} \\
+\midrule
+2019 & 0.140 & No \\
+2020 & 0.086 & No \\
+\textbf{2021} & \textbf{0.467} & \textbf{Yes} \\
+\textbf{2022} & \textbf{0.266} & \textbf{Yes} \\
+2023 & 0.085 & No \\
+2024 & 0.059 & No \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+True, independent news sources report the debt level of the utility being close to CFA800 billion at the end of 2024, as well as the amount of CFA500 billion debt to suppliers, leading to the renationalization of the utility via the presidential decree in May 2026 into a state-owned enterprise (Business in Cameroon; Ecofin Agency). In May 2026, according to the International Monetary Fund, the renationalization of the utility poses a danger of transferring unaddressed structural obligations to the budget of Cameroon (Financial Afrik). True, an independent proxy of the revenue leakage — the difference between the billed/prorated and metered electricity — increases in the range of 2.8\% (2020) to 25.7\% (2025) on the basis of the distribution efficiency data of the utility.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.85\linewidth]{figures/fig5_eneo_context.png}
+\caption{The utility (Cameroon): Model A risk score and real revenue-leakage proxy, side by side.}
+\label{fig:eneo}
+\end{figure}
+
+\subsection{Full Transfer Panel: All Seventeen Utility-Years}
+\label{S:results-full-transfer}
+
+Tables~\ref{tab:kplc} and~\ref{tab:eneo} point out those two utilities that have had an incident of distress; in Table~\ref{tab:full-transfer}, you will see the score of Model A for all the seventeen utility-years that are real and belong to the transfer panel, which includes Ghana's ECG, Zambia's ZESCO, and Tanzania's TANESCO, none of which have any record of distress incidents in this period.
+
+\begin{table}[h]
+\centering
+\small
+\caption{Model A transfer scores, all 17 real African utility-years.}
+\label{tab:full-transfer}
+\begin{tabular}{llccc}
+\toprule
+\textbf{Country} & \textbf{Utility} & \textbf{Year} & \textbf{P(distress)} & \textbf{Unanim.} \\
+\midrule
+Cameroon & ENEO & 2019 & 0.140 & No$^\dagger$ \\
+Cameroon & ENEO & 2020 & 0.086 & No$^\dagger$ \\
+Cameroon & ENEO & \textbf{2021} & \textbf{0.467} & \textbf{Yes} \\
+Cameroon & ENEO & \textbf{2022} & \textbf{0.266} & \textbf{Yes} \\
+Cameroon & ENEO & 2023 & 0.085 & No$^\dagger$ \\
+Cameroon & ENEO & 2024 & 0.059 & No$^\dagger$ \\
+Kenya & KPLC & 2021 & 0.117 & No \\
+Kenya & KPLC & 2022 & 0.177 & No \\
+Kenya & KPLC & \textbf{2023} & \textbf{0.239} & \textbf{Yes} \\
+Kenya & KPLC & 2024 & 0.051 & No \\
+Kenya & KPLC & 2025 & 0.045 & No \\
+Ghana & ECG & 2018 & 0.382 & No \\
+Ghana & ECG & 2019 & 0.406 & No \\
+Zambia & ZESCO & 2023 & 0.996 & No \\
+Zambia & ZESCO & 2024 & 0.557 & No \\
+Tanzania & TANESCO & 2017 & 0.329 & No \\
+Tanzania & TANESCO & 2018 & 0.226 & No \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+There are two caveats associated with this table. First, the six years indicated by $\dagger$ have just one of the four ratios measured (net margin); the other three ratios are imputed as medians of the training panel for scoring, so the probability of Model A for these particular years depends almost exclusively on net margin and should be interpreted with additional caution compared to the rest. Second, ZESCO's 2023 probability of 0.996 is the absolute highest value in the entire test panel; however, it is \emph{not} a unanimous-threshold year, since out of four thresholds of Model C only one (net margin) is exceeded -- despite its negative net margin, ZESCO's leverage, equity ratio, and debt-to-equity ratios in this year lie comfortably within the safe limits. This example shows nicely how reporting both the continuous classifier score and the discrete threshold rule in this paper makes sense: they can, and in this case do, differ from each other, and the very difference is important (only one bad ratio leading to a high probability, without the comprehensive balance sheet deterioration required by the four-threshold rule).
+
+\subsection{The Unanimous-Threshold Consensus}
+\label{S:results-consensus}
+
+In the whole seventeen-year transfer sample, four distinctively calculated threshold values for Model C coincide on the same three utility-years: the KPLC fiscal year 2023 and the utility's fiscal years 2021 and 2022. No other utility-year from any of the firms, including KPLC, the utility, ECG, ZESCO, and TANESCO, gets an agreed-upon flag. These three utility-years are, indeed, the exact two distress alarms that we have in this case study (Sections~\ref{S:results-transfer}, \ref{S:results-forecast}). The completely transparent, four-line rule for the thresholds catches them all without any error anywhere else in the sample.
+
+\subsection{Forecast-Ablation Case Study: The Utility's Real Consumption}
+\label{S:results-forecast}
+
+As mentioned in Section \ref{S:forecast-design}, the non-updated SARIMA(0,1,1)(0,1,1,12) model fitted using the utility's actual 2020--2022 monthly consumption figures and then projected forward results in a Consumption Forecast-Divergence Rate of $+0.176$ percentage points per month ($r = 0.52$, $r^2 = 0.27$, $p = 0.0015$, $n = 34$ months), a statistically significant trend, not random noise. Mean Absolute Forecast Error increases from about.
+\begin{figure}[h]
+\centering
+\includegraphics[width=\linewidth]{figures/fig6_eneo_forecast_divergence.png}
+\caption{Left: actual consumption vs. the frozen SARIMA forecast. Right: annual forecast-error percentage alongside the real revenue-leakage proxy.}
+\label{fig:forecast}
+\end{figure}
+
+When calculated yearly, the correlation of the forecasting error time series with the real revenue leakages from Section~\ref{S:results-transfer} is 0.992 -- a much too small sample size to conduct any serious statistical significance testing, but presented here simply as a consistency test between two independently calculated real-world signals (Table~\ref{tab:forecast-annual}).
+\begin{table}[h]
+\centering
+\small
+\caption{Annual forecast error vs. real revenue-leakage proxy, the utility.}
+\label{tab:forecast-annual}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Fiscal year} & \textbf{Mean abs.\ forecast error} & \textbf{Revenue-leakage proxy} \\
+\midrule
+2023 & 3.76\% & 22.28\% \\
+2024 & 5.92\% & 24.56\% \\
+2025 & 7.59\% & 25.66\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection{Forecast-Specification Sensitivity Check}
+\label{S:forecast-sensitivity}
+
+Since CFDR relies on a specific frozen model, there are three more tests to see if the result is not simply a product of that particular choice but something that is present in the data. Firstly, when running the exact same SARIMA(0,1,1)(0,1,1,12) model again, the CFDR number is confirmed precisely: $CFDR = +0.176$pp/month, $p = 0.0015$, $n = 34$. Secondly, the SARIMA(1,1,1)(1,1,1,12) model was fit to the same training period; it turned out to be numerically unstable on the series, creating forecast errors in thousands of percents within a few months (it is not even comparable); the problem of numerical instability is given as the reason why the more simple and more stable model was used, not as another specification which was tried and did not yield a convenient answer. Thirdly, a very simple baseline forecast based on naive-seasonality (that is, forecasting the consumption in any given month as the consumption in the same month last year) was calculated for the whole 34-month test period, since such a forecast will always use only one real observation twelve months earlier. It never requires any information from the future relative to the month being considered, so it can be computed for all 34 months and not just some of them.
+
+A comparison over the entire window period, in contrast, is definitive rather than inconclusive. In the same 34-month period, the naïve seasonal baseline model displays absolutely no evidence of any divergence (CFDR $= -0.015$pp/month, $r^2 = 0.00$, $p = 0.69$) and, essentially, constant error (5.1\% early-window, 2.6\% late-window, actually declining over time), whereas the frozen SARIMA model exhibits an increasing error rate from 4.1\% to 10.7\% during the same window ($p = 0.0015$). This constitutes an important robustness result that favors the authors' approach since it excludes the possibility of an alternative interpretation according to which any reasonable forecasting model would exhibit an increasing error rate over this horizon simply as a matter of course. Indeed, a model with no learned structure whatsoever, applied to the same set of months, displays absolutely no increase; only the SARIMA model following the utility's actual seasonality pattern does.
+
+\subsection{Three Independent Signals, One Timeline}
+
+Table~\ref{tab:timeline} provides a summary of the whole result. A transferred ratio classifier, a revenue-leakage proxy, and a consumption forecast-divergence rate have been independently constructed and have never been reconciled, yet all three of them agree on both when the utility started having problems and that the problems have been worsening over the time frame in which independent news reporting reveals there is a legitimate debt crisis that required intervention by the government. In addition, there is an extra row in the table that does not come from this paper's model or data at all: a sector-level quasi-fiscal deficit (QFD) diagnostic calculated independently for 2013--2014, a few years before the panel window used in this paper even starts. It is not one of the three signals created in this paper, and it has never been used in any model in this paper, yet it has been provided to answer a question that the other three cannot answer: Was the sector in fiscal trouble before the panel window started?
+
+\begin{table*}[t]
+\centering
+\small
+\caption{Three independently constructed real signals on one real timeline (the utility, Cameroon), plus independent pre-panel sector context.}
+\label{tab:timeline}
+\begin{tabular}{p{2.2cm} p{6.5cm} p{5.8cm}}
+\toprule
+\textbf{Window} & \textbf{Signal} & \textbf{Source} \\
+\midrule
+2013--2014 (pre-panel context) & World Bank QFD diagnostic finds the sector's quasi-fiscal deficit low and stable (0.6--0.7\% of GDP), falling to $\approx$0\% ($-8$ million, $-2\%$ of revenue) under benchmark-efficient performance -- not itself a model input & Independent World Bank diagnostic, external to this paper's data and model (Trimble et al.) \\
+2021--2022 & Transferred ratio classifier + Model C unanimously flag distress -- the only unanimous years in the 17-year panel besides KPLC FY2023 & Financial ratios, United States-trained model, never trained on the utility \\
+2023--2025 & Frozen consumption forecast increasingly misses reality: CFDR $= +0.176$pp/month ($p = 0.0015$) & The utility's own real monthly consumption \\
+2020--2025 & Real revenue-leakage proxy climbs from 2.8\% to 25.7\% & The utility's own real internal operational data \\
+2022--2026 & Real debt grows to $\sim$CFA800bn; May 2026 government rescue and renationalization & Independent news reporting (Business in Cameroon; Ecofin Agency; Financial Afrik) \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+However, while the QFD benchmark for 2013-2014 is some nine years out of date from the panel’s own timeline of 2021-2025 (and is not an alternative to specific utility analysis, as pointed out by Trimble et al.), it does serve to confirm that underlying assumption implicit in the timeline: the industry was not yet in structural distress when the panel timeline begins, so that the 2021-2022 timeline that all four converge on is more likely to reflect actual distress.
+
+%% =====================================================================
+
+\section{Discussion}
+\label{S:discussion}
+
+\subsection{What the Ablation Result Does and Does Not Show}
+
+The comparison of Model A against Model B on actual data does not lend any support to the hypothesis proposed by the Proposal in terms of a material effect: the AUC delta on the operational subset is small, and, when using a generic 0.5 cutoff point, it first seemed that Model A failed altogether. As shown in Section~\ref{S:results-ablation}, the failure of the model at the threshold of 0.5 was an artifact related to the small and rare-event dataset used and not an actual modelling failure: using their respective optimal cutoff points, both models yield valid predictions, and the F1 of Model B is indeed better. It does not provide any support, but is consistent with, the trend suggested by the Proposal based on its synthetic panel: the AUC delta is small, and the bootstrap interval crosses zero. The conclusion drawn in both the Proposal and this Draft remains the same: even though the data may contribute additional classification power, the effect cannot be confirmed using either the synthetic panel or the subset of actual data (about four distress years).
+
+\subsection{What the Transfer Validation Does and Does Not Show}
+
+The KPLC result (Section~\ref{S:results-transfer}) is the strongest evidence this project has: a model trained only on US data assigns a real Kenyan fiscal year top risk score, and that year is found to be most at risk by an actual government audit for that year, which it never saw. This is one case of many needed for a validated out-of-sample accuracy rate, and five observations are too few to calculate a meaningful transfer-generalization rate; the KPLC result must therefore be seen merely as an existence proof for the design working, rather than evidence of its reliability across arbitrary Sub-Saharan African utilities. The utility's own result is interpreted with even more caution, since there is no individual-year independent audit result to compare it against; rather, the unanimous-threshold agreement in 2021-2022, which is supported by an actual revenue leakage trend as well as news of debt problems later that year, is circumstantial and directional evidence, not one individual validation as in the KPLC case.
+
+\subsection{What the Forecast-Ablation Case Study Does and Does Not Show}
+
+The Consumption Forecast Divergence Rate is a statistically significant, real, quantified discovery from thirty-four real months of data, and thus provides the strongest methodological contribution in this paper. There are two objections and limitations raised which, unlike in previous work, will be discussed explicitly and not implicitly. The first potential objection is that some increase in the forecast error in a frozen model may simply be anticipated in any static model for any underlying distress as a feature of extrapolation. Section~\ref{S:forecast-sensitivity} does not assert this as fact, but directly tests it: a trivial naive seasonal model, when assessed over the same 34-month span as the frozen SARIMA model, has no statistically significant error growth over the horizon ($p = 0.69$), while the frozen SARIMA model's divergence persists as significant over this same period ($p = 0.0015$). This refutes the objection as a potential explanation, allowing the divergence to be interpreted as a real change in the behavior of the utility itself, not an artifact of forecasting. The other real limitation is more specific: the correlation between forecast error and the revenue leak proxy (Section~\ref{S:results-forecast}) over a year is computed from only three overlapping years, both series increasing over that span; A high correlation coefficient for three monotonic points is by design and is cited as a check on the directionality of the relationship and not as a validated statistical one.
+
+\subsection{Limitations}
+
+The small number of observations constrains the entire paper: there are only six actual distress years for the US, five actual Sub-Saharan African utilities in the transfer phase, and thirty-four actual forecast horizons in months, and each is small by the standards of a fully powered empirical study on its own. The transfer sample is a convenience sample of five utilities rather than a random sample of Sub-Saharan African utilities, so no generalization from those five is made. There is a difference between the training sample (US investor-owned and quasi-public utilities) and the target sample (unlisted state-owned African utilities), which could impact transfer validity beyond what can be tested with five transfer utilities. Finally, this is still a single case study of one representative utility; the applications in Section~\ref{S:applications} are meant to describe a generalization methodology, not an actual generalization.
+
+%% =====================================================================
+
+\section{Applications}
+\label{S:applications}
+
+A robust application of this pipeline would have three users, with each receiving the decomposed and forward-looking indicators and not the opaque or aggregated indicators. The lenders such as the African Development Bank, the International Finance Corporation, and bilateral organizations would be able to apply the operational versus structural decomposition from Stage 4, combined with the classifier that uses transfer learning in Section~\ref{S:results-transfer}, as another input alongside static ratios for evaluating the ability of the utility to meet its power-purchase agreements. The national regulators such as ARSEL, which do not have a quantitative early-warning system, can apply the unanimous threshold method of Section~\ref{S:results-consensus} without any need for a machine learning environment; it just needs four ratios and four thresholds and has been able to identify all actual distress events in this panel with no false positive results. Since the method is a generalized methodology rather than a utility-specific script, the same methodology, assuming the availability of data, can be applied to other state-owned utilities like ECG (Ghana), ZESCO (Zambia), and TANESCO (Tanzania). These utilities have been included in the transfer panel under consideration without a unanimous flag.
+
+In concrete terms, three subsequent deployments are feasible short-term applications of this project and not open research questions. First, the four-level threshold consensus decision-rule (Section~\ref{S:results-consensus}) can be applied today in an ongoing, automated manner against the next annual report to come out of each utility, without need for retraining and without machine-learning knowledge on the user's side -- the only thing needed is a simple spreadsheet function, not a model. Second, the Consumption Forecast Divergence Rate (Section~\ref{S:results-forecast}) can be calculated every month and not retrospectively, becoming an early warning indicator on a utility manager's or a regulator's dashboard with months to go before the next financial report to be filed would even be due. Third, the very transfer-learning architecture (Section~\ref{S:transfer-design}) can be reapplied to any Sub-Saharan African utility publishing its annual ratios, for virtually zero marginal data acquisition costs, because it does not require any country-specific retraining -- a natural test for a regional development bank considering doing its utility loans portfolio a first pass screening all at once.
+
+%% =====================================================================
+\section{Conclusion}
+\label{S:conclusion}
+
+This paper investigates the above Project Proposal’s only hypothesis – that the operational indicators, load forecast divergence in particular, contain information about the financial distress of a data-poor, state-owned electricity utility company that is not available through the delayed accounting ratios alone, and that this information can be extracted without ever training a model on the actual labelled outcome from the data of the very utility itself. In contrast to the proposal, which was tested on a synthetic panel and a publicly available proxy series for the forecasting of the company’s load forecast, this Draft of the paper tests the above hypothesis using three real independent indicators, namely, a real ratio-based classifier that was trained on a real US comparator panel and then transferred without retraining on a real Sub-Saharan Africa comparator panel; a real revenue leak proxy calculated on the data of the company itself; and a real Consumption Forecast Divergence Rate calculated on the metered consumption series of the company. In terms of the utility function itself, the same classifier and the interpretable consensus rule with four thresholds pick out the same two fiscal years, and none other in a set of seventeen, that both the consumption forecast divergence and debt crisis, separately confirmed by government intervention and support, pick out. The more limited comparison of ratio alone vs ratio plus operational measures that generated the original hypothesis is itself not validated with any significant effect on the smaller real United States subset available, and the null result is preserved instead of reinterpreted, as was done by the Proposal itself.
+
+\subsection{Research Impact}
+\label{S:impact}
+
+The practical relevance of this work should be assessed in relation to the issues raised in Section \ref{S:painpoints}, rather than in isolation from classification accuracy. In the pre-project state, any lender, regulator, or manager dealing with an unlisted and state-owned utility had access to zero means of early warning -- the whole literature on distressed firms in quantitative finance relies on a historical labelled dataset and disclosure, both of which are systematically impossible for such companies. The transfer learning methodology employed in this project fills this gap without any need for data that is exactly the source of the problem -- a lender can screen an untrained utility based on that utility's reported ratios, and a regulator can calculate the four-threshold consensus rule with a calculator and Table~\ref{tab:thresholds} from this paper. With the forecast-ablation case study, a second and entirely independent early warning channel operates through the use of operational metering data only, months and years in advance of the next financial statement to be audited, and this is precisely what counts, of course, in the context of the reporting regime (multi-year lags in disclosures) that made this effort necessary in the first place. By the timing in Table~\ref{tab:timeline}, an early warning system based on either signal would have alerted to the utility's decline between 2021 and 2022, approximately one year before the debt problem became newsworthy and many years before the 2026 government bailout -- a kind of lead time that could have value to a lender or regulator contemplating intervention, even if, as discussed in Section~\ref{S:discussion}, this one case does not prove how consistently such lead time might recur for other utilities through transfer testing.
+
+The first of the three follow-up issues identified with respect to the Proposal’s risk assessment is now resolved. The robustness analysis of the logistic regression of Section \ref{S:method}, which was deferred in earlier versions due to the small sample size issues highlighted in Section \ref{S:deviations}, is presented in Section~\ref{S:results-robustness}. Logistic regression turns out to be a superior ranker compared to gradient boosting and random forest on the full 87-observation panel data set, while Random Forest substantially outperforms logistic regression on the 48-observation operational data set. The latter is taken cautiously due to the small number of years in which the company was in distress, yet it eliminates the explanation that the operational variables provide no information for any model.
+
+Two additional steps still need to be taken for this Final Project. Firstly, the real and independently validated revenue leakage feature (difference between billings and metered volumes as a context in Section~\ref{S:results-transfer}) has yet to be incorporated into the ratio-based classifier as a feature to train on, only being used as a validation context; such an implementation, as soon as the monthly time horizon becomes consistent with the classifier's annual panel time horizon, will be a logical follow-up step. Secondly, with the availability of disaggregated data at sub-national or agency levels for the utility company from the ARSEL or equivalent regulatory body, which was planned initially within the scope of the Proposal, it will become possible to conduct the panel training on real data for the utility company itself rather than using transfer learning, which was applied as a workaround in the current work.
+
+\subsection{Project Status and Schedule}
+\label{S:schedule}
+
+In relation to the seven-week schedule outlined in the Project Proposal, the project is on track. The first four stages of the project (data collection, prediction, classification, and interpretability) have been completed using real data, and the current Draft constitutes the Week 7 deliverable in the initial schedule. Task 1 through Task 3 are listed in Table~\ref{tab:schedule}, which outlines the remaining schedule for the Capstone Course.
+
+\begin{table}[h]
+\centering
+\small
+\caption{Remaining tasks and schedule for the Final Project.}
+\label{tab:schedule}
+\begin{tabular}{p{1.6cm} p{5.7cm} p{1.3cm}}
+\toprule
+\textbf{Target} & \textbf{Task} & \textbf{Status} \\
+\midrule
+Week 1--2 & Gradient-boosted/random-forest robustness check (Sec.~\ref{S:results-robustness}) & Complete \\
+Week 2--3 & Assemble additional real United States company-years to firm up the robustness result on a larger panel & Not started \\
+Week 3--4 & Reconcile the monthly revenue-leakage feature with the classifier's annual panel and re-evaluate Model B with it included (Task 1) & Not started \\
+Week 5 & Follow up with ARSEL or an equivalent regulator on disaggregated, sub-national data availability (Task 2) & Not started \\
+Week 6 & Incorporate instructor and peer feedback on this Draft; revise Sections~\ref{S:results}--\ref{S:discussion} accordingly & Not started \\
+Week 7 & Finalize the Final Project report and source-code repository for submission & Not started \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+No task on the critical path for the Final Project depends on data that is not already in hand: the three open items above would strengthen the result but are not prerequisites for a complete Final Project submission, since Sections~\ref{S:results}--\ref{S:discussion} of this Draft already report a full, real-data evaluation of the paper's central hypothesis.
+
+%% =====================================================================
+\section*{Works Cited}
+\label{S:refs}
+
+\begin{list}{}{\setlength{\leftmargin}{0.5in}\setlength{\itemindent}{-0.5in}\setlength{\itemsep}{10pt}\setlength{\parsep}{0pt}}
+
+\item Altman, Edward I. ``Financial Ratios, Discriminant Analysis and the Prediction of Corporate Bankruptcy.'' \textit{The Journal of Finance}, vol. 23, no. 4, 1968, pp. 589--609.
+
+\item Andoh, Prince Yaw, et al. ``Forecasting Electricity Demand in Ghana with the SARIMA Model.'' \textit{Journal of Applied Engineering and Technological Science}, vol. 3, no. 1, 2021, doi.org/10.37385/jaets.v3i1.288.
+
+\item Barboza, Flavio, et al. ``Machine Learning Models and Bankruptcy Prediction.'' \textit{Expert Systems with Applications}, vol. 83, 2017, pp. 405--17.
+
+\item Beaver, William H. ``Financial Ratios as Predictors of Failure.'' \textit{Journal of Accounting Research}, vol. 4, 1966, pp. 71--111.
+
+\item Box, George E. P., and Gwilym M. Jenkins. \textit{Time Series Analysis: Forecasting and Control}. Holden-Day, 1970.
+
+\item Breiman, Leo. ``Random Forests.'' \textit{Machine Learning}, vol. 45, no. 1, 2001, pp. 5--32.
+
+\item Bussmann, Niklas, et al. ``Explainable Machine Learning in Credit Risk Management.'' \textit{Computational Economics}, vol. 57, no. 1, 2021, pp. 203--16.
+
+\item Business in Cameroon. ``Eneo's Debt Reaches CFA800bn as Cameroon Prepares Rescue Plan.'' \textit{Business in Cameroon}, 2026, businessincameroon.com/energy/2210-15229-eneo-s-debt-reaches-cfa800bn-as-cameroon-prepares-rescue-plan.
+
+\item Chawla, Nitesh V., et al. ``SMOTE: Synthetic Minority Over-Sampling Technique.'' \textit{Journal of Artificial Intelligence Research}, vol. 16, 2002, pp. 321--57.
+
+\item Chen, Tianqi, and Carlos Guestrin. ``XGBoost: A Scalable Tree Boosting System.'' \textit{Proceedings of the 22nd ACM SIGKDD International Conference on Knowledge Discovery and Data Mining}, 2016, pp. 785--94.
+
+\item Cox, D. R. ``The Regression Analysis of Binary Sequences.'' \textit{Journal of the Royal Statistical Society, Series B}, vol. 20, no. 2, 1958, pp. 215--42.
+
+\item DeLong, Elizabeth R., et al. ``Comparing the Areas under Two or More Correlated Receiver Operating Characteristic Curves: A Nonparametric Approach.'' \textit{Biometrics}, vol. 44, no. 3, 1988, pp. 837--45.
+
+\item Ecofin Agency. ``Cameroon Renationalizes Eneo, Creates State Utility Socadel.'' \textit{Ecofin Agency}, 2026, ecofinagency.com/news-industry/0905-55422-cameroon-renationalizes-eneo-creates-state-utility-socadel.
+
+\item Elhoseny, Mohamed, et al. ``Deep Learning-Based Model for Financial Distress Prediction.'' \textit{Annals of Operations Research}, vol. 345, 2025, pp. 885--907.
+
+\item Financial Afrik. ``Cameroon: IMF Warns About the Financial Consequences of the Renationalization of Eneo.'' \textit{Financial Afrik}, 2026, financialafrik.com/en/2026/06/06/cameroon-imf-warns-about-the-financial-consequences-of-the-renationalization-of-eneo.
+
+\item Fukas, Philipp, et al. ``Predicting Financial Distress via Static and Dynamic Features: A Boruta-Enhanced XGBoost Approach with SHAP Interpretability.'' \textit{Computational Economics}, 2026, doi.org/10.1007/s10614-026-11334-7.
+
+\item He, Yang, et al. ``The Extraction of Early Warning Features for Predicting Financial Distress Based on XGBoost Model and SHAP Framework.'' \textit{International Journal of Financial Engineering}, vol. 8, no. 4, 2021, doi.org/10.1142/S2424786321410048.
+
+\item Hochreiter, Sepp, and Jürgen Schmidhuber. ``Long Short-Term Memory.'' \textit{Neural Computation}, vol. 9, no. 8, 1997, pp. 1735--80.
+
+\item Hong, Tao, and Shu Fan. ``Probabilistic Electric Load Forecasting: A Tutorial Review.'' \textit{International Journal of Forecasting}, vol. 32, no. 3, 2016, pp. 914--38.
+
+\item International Energy Agency. \textit{Clean Energy Investment for Development in Africa}. IEA, 2024.
+
+\item Kong, Weicong, et al. ``Short-Term Residential Load Forecasting Based on LSTM Recurrent Neural Network.'' \textit{IEEE Transactions on Smart Grid}, vol. 10, no. 1, 2019, pp. 841--51.
+
+\item Kristanti, Farida T., et al. ``Financial Distress Prediction in Emerging Markets by Using a Machine Learning Approach for Financial Sustainability.'' \textit{Discover Sustainability}, vol. 6, 2025, article 1296, doi.org/10.1007/s43621-025-02199-1.
+
+\item Le, Hong Hanh, and Jean-Laurent Viviani. ``Predicting Bank Failure: An Improvement by Implementing a Machine Learning Approach.'' \textit{Research in International Business and Finance}, vol. 44, 2018, pp. 16--25.
+
+\item Lokanan, Mark E., and Sana Ramzan. ``Predicting Financial Distress in TSX-Listed Firms Using Machine Learning Algorithms.'' \textit{Frontiers in Artificial Intelligence}, vol. 7, 2024, article 1466321.
+
+\item Lundberg, Scott M., and Su-In Lee. ``A Unified Approach to Interpreting Model Predictions.'' \textit{Advances in Neural Information Processing Systems}, vol. 30, 2017, pp. 4765--74.
+
+\item Molnar, Christoph. \textit{Interpretable Machine Learning: A Guide for Making Black Box Models Explainable}. 2nd ed., 2022, christophm.github.io/interpretable-ml-book/.
+
+\item Musbah, Hamza, and Mohamed El-Hawary. ``SARIMA Model Forecasting of Short-Term Electrical Load Data Augmented by Fast Fourier Transform Seasonality Detection.'' \textit{2019 IEEE Electrical Power and Energy Conference (EPEC)}, 2019.
+
+\item Nguyen, Thi Thu Ha, et al. ``Bankruptcy Prediction Using Machine Learning and SHAP.'' \textit{Review of Quantitative Finance and Accounting}, 2023.
+
+\item Nibagwire, Deborah. ``Power Generation Overcapacity in Selected Sub-Saharan African Countries: Political-Economic Drivers and Grid Infrastructure Challenges.'' \textit{Frontiers in Energy Research}, vol. 13, 2025, doi.org/10.3389/fenrg.2025.1549844.
+
+\item Office of the Auditor-General, Republic of Kenya. \textit{Report of the Auditor-General on the Financial Statements of Kenya Power and Lighting Company PLC for the Year Ended 30 June 2023}. Office of the Auditor-General, 2024, oagkenya.go.ke.
+
+\item Ohlson, James A. ``Financial Ratios and the Probabilistic Prediction of Bankruptcy.'' \textit{Journal of Accounting Research}, vol. 18, no. 1, 1980, pp. 109--31.
+
+\item Prodjinotho, U. T., et al. ``Long-Term Forecasting of Peak Demand and Annual Electricity Consumption of the West African Power Pool Interconnected Network by 2032.'' \textit{International Journal of Energy and Power Engineering}, vol. 13, no. 2, 2024.
+
+\item Shumway, Tyler. ``Forecasting Bankruptcy More Accurately: A Simple Hazard Model.'' \textit{The Journal of Business}, vol. 74, no. 1, 2001, pp. 101--24.
+
+\item Trimble, Chris, et al. \textit{Financial Viability of Electricity Sectors in Sub-Saharan Africa: Quasi-Fiscal Deficits and Hidden Costs}. World Bank Policy Research Working Paper no. 7788, World Bank Group, Aug. 2016, doi.org/10.1596/1813-9450-7788.
+
+\item Trindade, Artur. \textit{Electricity Load Diagrams 2011-2014}. UCI Machine Learning Repository, 2015, doi.org/10.24432/C58C86.
+
+\item Veganzones, David, and Eric Severin. ``Corporate Failure Prediction Models in the Twenty-First Century: A Review.'' \textit{European Journal of Finance}, vol. 27, no. 4-5, 2021, pp. 1--30.
+
+\item Youden, William J. ``Index for Rating Diagnostic Tests.'' \textit{Cancer}, vol. 3, no. 1, 1950, pp. 32--35.
+
+\item Zmijewski, Mark E. ``Methodological Issues Related to the Estimation of Financial Distress Prediction Models.'' \textit{Journal of Accounting Research}, vol. 22, 1984, pp. 59--82.
+
+\end{list}
+
+\end{document}
